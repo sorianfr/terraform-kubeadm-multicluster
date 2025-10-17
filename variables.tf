@@ -36,9 +36,9 @@ variable "clusters" {
   type = list(object({
     name           = string
     region         = string
-    vpc_id         = string
-    subnets        = list(string)
-    control_ami    = string
+    vpc_id         = string  REMOVE
+    subnets        = list(string) REMOVE
+    control_ami    = string 
     worker_ami     = string
     instance_type  = string
     worker_min     = number
@@ -46,5 +46,19 @@ variable "clusters" {
     worker_desired = number
     pod_cidr       = string
     service_cidr   = string
+    worker_ebs_volumes = optional(list(object({
+      volume_size = number
+      volume_type = string
+      device_name = string
+    })), []) # default to empty list if not provided
   }))
+}
+
+
+variable "copy_files_to_bastion" {
+  description = "List of local files that should be copied to the bastion host"
+  type        = list(string)
+  default = [
+    "my_k8s_key.pem"
+  ]
 }
