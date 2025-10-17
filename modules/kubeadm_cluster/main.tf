@@ -1,5 +1,16 @@
 # Kubeadm cluster module
 
+# Obtener última AMI de Packer
+data "aws_ami" "k8s_base" {
+  most_recent = true
+  owners      = ["self"]
+
+  filter {
+    name   = "name"
+    values = ["k8s-base-*"]
+  }
+}
+
 data "aws_caller_identity" "current" {}
 
 data "aws_iam_policy_document" "ec2_assume" {
@@ -8,6 +19,30 @@ data "aws_iam_policy_document" "ec2_assume" {
     principals { type = "Service" identifiers = ["ec2.amazonaws.com"] }
   }
 }
+
+# Private Subnet
+resource "aws_subnet" "k8s_private_subnet" {
+  vpc_id                  = var.vpc_id
+  cidr_block              = var.private_subnet_cidr_block
+  map_public_ip_on_launch = false
+  availability_zone       = var.availability_zone
+
+  tags = {
+    Name = "${var.cluster_name}_private_subnet"
+  }
+}
+
+
+# Associate Private Subnet with Private Route Table
+resource "aws_route_table_association" "private_rta" {
+  subnet_id      = aws_subnet.k8s_private_subnet.id
+  route_table_id = var.private_route_table_id
+}
+
+
+
+
+
 
 # Control-plane IAM role
 resource "aws_iam_role" "cp_role" {
