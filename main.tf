@@ -8,8 +8,236 @@ terraform {
 }
 
 provider "aws" {
-  region = "eu-west-1"
+  region = var.region
 }
+
+# Generate a TLS private key
+resource "tls_private_key" "k8s_key_pair" {
+  algorithm = "RSA"
+  rsa_bits  = 2048
+}
+
+# Key Pair
+resource "aws_key_pair" "k8s_key_pair" {
+  key_name   = "my_k8s_key"
+  public_key = tls_private_key.k8s_key_pair.public_key_openssh
+}
+
+# Save the private key locally
+resource "local_file" "save_private_key" {
+  filename        = "${path.module}/my_k8s_key.pem"
+  content         = tls_private_key.k8s_key_pair.private_key_pem
+  file_permission = "0600"
+
+}
+
+# Output the private key (for reference or debugging)
+output "k8s_private_key" {
+  value     = tls_private_key.k8s_key_pair.private_key_pem
+  sensitive = true
+}
+
+
+# VPC for All Clusters
+resource "aws_vpc" "main_vpc" {
+  cidr_block           = var.vpc_cidr_block
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+
+  tags = {
+    Name = "main_vpc"
+  }
+}
+
+# Public Subnet
+resource "aws_subnet" "public_subnet" {
+  vpc_id                  = aws_vpc.main_vpc.id
+  cidr_block              = var.public_subnet_cidr_block
+  map_public_ip_on_launch = true
+  availability_zone       = var.availability_zone
+
+  tags = {
+    Name = "public_subnet"
+  }
+}
+
+# Internet Gateway
+resource "aws_internet_gateway" "main_igw" {
+  vpc_id = aws_vpc.main_vpc.id
+
+  tags = {
+    Name = "main_igw"
+  }
+}
+
+
+# Route Table for Public Subnet
+resource "aws_route_table" "public_rt" {
+  vpc_id = aws_vpc.main_vpc.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main_igw.id
+  }
+
+  tags = {
+    Name = "public_rt"
+  }
+}
+
+# Associate Public Subnet with Public Route Table
+resource "aws_route_table_association" "public_rta" {
+  subnet_id      = aws_subnet.public_subnet.id
+  route_table_id = aws_route_table.public_rt.id
+}
+
+# Elastic IP for Shared NAT Gateway
+resource "aws_eip" "shared_nat_eip" {
+
+  tags = {
+    Name = "shared_nat_eip"
+  }
+}
+
+# Shared NAT Gateway
+resource "aws_nat_gateway" "shared_nat_gw" {
+  allocation_id = aws_eip.shared_nat_eip.id
+  subnet_id     = aws_subnet.public_subnet.id
+
+  tags = {
+    Name = "shared_nat_gw"
+  }
+
+  depends_on = [aws_eip.shared_nat_eip]
+}
+
+# Shared Private Route Table
+resource "aws_route_table" "shared_private_rt" {
+  vpc_id = aws_vpc.main_vpc.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.shared_nat_gw.id
+  }
+
+  tags = {
+    Name = "shared_private_rt"
+  }
+}
+
+# Shared Bastion Host (uses public subnet)
+resource "aws_instance" "bastion" {
+  ami                    = var.ami_id
+  instance_type          = "t3.micro"
+  subnet_id              = aws_subnet.public_subnet.id
+  vpc_security_group_ids = [aws_security_group.bastion_sg.id]
+  key_name               = aws_key_pair.k8s_key_pair.key_name
+
+  tags = {
+    Name = "shared_bastion"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "sudo apt update -y",
+      "sudo apt install -y curl wget unzip jq",
+      "sudo apt install -y ansible", # Install Ansible
+      "curl -LO https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl",
+      "chmod +x kubectl",
+      "sudo mv kubectl /usr/local/bin/",
+      "kubectl version --client" # Verify kubectl installation
+    ]
+  }
+
+  connection {
+    type        = "ssh"
+    user        = "ubuntu"
+    private_key = tls_private_key.k8s_key_pair.private_key_pem
+    host        = self.public_ip
+  }
+
+  depends_on = [local_file.save_private_key]
+
+}
+
+# Shared Bastion Host Security Group
+resource "aws_security_group" "bastion_sg" {
+  vpc_id = aws_vpc.main_vpc.id
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"] # Adjust for production environments
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "bastion_sg"
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 module "clusters" {
   for_each = { for c in var.clusters : c.name => c }
