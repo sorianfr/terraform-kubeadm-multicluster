@@ -11,6 +11,16 @@ provider "aws" {
   region = var.region
 }
 
+# Index clusters by name for reuse
+locals {
+  clusters_by_name = {
+    for cluster in var.clusters :
+    cluster.cluster_name => cluster
+  }
+}
+
+
+
 # Generate a TLS private key
 resource "tls_private_key" "k8s_key_pair" {
   algorithm = "RSA"
@@ -183,60 +193,34 @@ resource "aws_security_group" "bastion_sg" {
   }
 }
 
+# IAM Role for EC2 instances to access S3 and other resources
+resource "aws_iam_role" "AmazonEBSCSIDriverRole" {
+  name = "AmazonEBSCSIDriverRole"
 
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Action = "sts:AssumeRole",
+        Effect = "Allow",
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# Attach policy to role
+resource "aws_iam_role_policy_attachment" "attach_policy" {
+  role       = aws_iam_role.AmazonEBSCSIDriverRole.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+}
+# Create instance profile to be attached to ec2 instances. 
+resource "aws_iam_instance_profile" "AmazonEBS_instance_profile" {
+  name = "AmazonEBS_instance_profile"
+  role = aws_iam_role.AmazonEBSCSIDriverRole.name
+}
 
 
 module "clusters" {
@@ -245,7 +229,7 @@ module "clusters" {
 
   name            = each.value.name
   region          = each.value.region
-  vpc_id          = each.value.vpc_id
+  vpc_id          = aws_vpc.main_vpc.id
   subnets         = each.value.subnets
   control_ami     = each.value.control_ami
   worker_ami      = each.value.worker_ami
