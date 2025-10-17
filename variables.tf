@@ -35,9 +35,6 @@ variable "clusters" {
   description = "List of cluster definitions"
   type = list(object({
     name           = string
-    region         = string
-    vpc_id         = string  REMOVE
-    subnets        = list(string) REMOVE
     control_ami    = string 
     worker_ami     = string
     instance_type  = string
