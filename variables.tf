@@ -1,3 +1,26 @@
+variable "region" {
+  description = "AWS region for all resources"
+  type        = string
+  default     = "us-east-1" # Optional default value
+}
+
+variable "availability_zone" {
+  type        = string
+  default     = "us-east-1a"
+  description = "Availability zone for the public subnet"
+}
+
+variable "ami_id" {
+  description = "AMI ID for the EC2 instances"
+  type        = string
+  default     = "ami-0360c520857e3138f" # Ubuntu 20.04 in us-east-1; change for your region/OS preference
+
+}
+
+variable "instance_type" {
+  default = "c7i-flex.large"
+}
+
 variable "clusters" {
   description = "List of cluster definitions"
   type = list(object({
