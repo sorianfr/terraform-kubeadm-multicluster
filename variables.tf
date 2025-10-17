@@ -35,6 +35,7 @@ variable "clusters" {
   description = "List of cluster definitions"
   type = list(object({
     name           = string
+    private_subnet_cidr_block = string
     control_ami    = string 
     worker_ami     = string
     instance_type  = string
