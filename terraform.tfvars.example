@@ -1,0 +1,16 @@
+clusters = [
+  {
+    name            = "cluster1"
+    region          = "eu-west-1"
+    vpc_id          = "vpc-xxxxxx"
+    subnets         = ["subnet-aaa", "subnet-bbb"]
+    control_ami     = "ami-ubuntu123"
+    worker_ami      = "ami-ubuntu123"
+    instance_type   = "t3.medium"
+    worker_min      = 1
+    worker_max      = 3
+    worker_desired  = 2
+    pod_cidr        = "10.244.0.0/16"
+    service_cidr    = "10.96.0.0/12"
+  }
+]
