@@ -15,7 +15,7 @@ provider "aws" {
 locals {
   clusters_by_name = {
     for cluster in var.clusters :
-    cluster.cluster_name => cluster
+    cluster.name => cluster
   }
 }
 
@@ -230,7 +230,11 @@ module "clusters" {
   name            = each.value.name
   region          = each.value.region
   vpc_id          = aws_vpc.main_vpc.id
-  subnets         = each.value.subnets
+  availability_zone = var.availability_zone
+  private_route_table_id = aws_route_table.shared_private_rt.id
+  key_name               = aws_key_pair.k8s_key_pair.key_name
+  public_sg_id           = aws_security_group.bastion_sg.id
+  bastion_public_dns     = aws_instance.bastion.public_dns
   control_ami     = each.value.control_ami
   worker_ami      = each.value.worker_ami
   instance_type   = each.value.instance_type
@@ -240,3 +244,11 @@ module "clusters" {
   pod_cidr        = each.value.pod_cidr
   service_cidr    = each.value.service_cidr
 }
+
+  private_subnet_cidr_block = each.value.private_subnet_cidr_block
+  controlplane_private_ip   = each.value.controlplane_private_ip
+  pod_subnet                = each.value.pod_subnet
+  service_cidr              = each.value.service_cidr
+
+
+
