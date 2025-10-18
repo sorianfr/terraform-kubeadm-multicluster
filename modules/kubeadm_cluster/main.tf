@@ -123,7 +123,7 @@ resource "aws_instance" "control_plane" {
 # Worker launch template
 resource "aws_launch_template" "worker_lt" {
   name_prefix   = "${var.name}-worker-"
-  image_id      = var.worker_ami
+  ami = data.aws_ami.k8s_base.id
   instance_type = var.instance_type
 
   iam_instance_profile { name = aws_iam_instance_profile.worker_profile.name }
