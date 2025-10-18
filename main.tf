@@ -237,8 +237,6 @@ module "clusters" {
   iam_instance_profile   = aws_iam_instance_profile.AmazonEBS_instance_profile.name
   public_sg_id           = aws_security_group.bastion_sg.id
   bastion_public_dns     = aws_instance.bastion.public_dns
-  control_ami     = each.value.control_ami
-  worker_ami      = each.value.worker_ami
   instance_type   = each.value.instance_type
   worker_min      = each.value.worker_min
   worker_max      = each.value.worker_max
