@@ -94,18 +94,28 @@ resource "aws_iam_role_policy" "worker_secrets" {
   })
 }
 
+
+
+
+
+
 # Control plane instance
 resource "aws_instance" "control_plane" {
-  ami                    = var.control_ami
+  ami                    = data.aws_ami.k8s_base.id
   instance_type          = var.instance_type
-  subnet_id              = var.subnets[0]
+  subnet_id              = aws_subnet.k8s_private_subnet.id
+  vpc_security_group_ids = [aws_security_group.k8s_sg.id]
   iam_instance_profile   = aws_iam_instance_profile.cp_profile.name
+  key_name               = var.key_name
+  private_ip             = var.controlplane_private_ip
 
   user_data = templatefile("${path.module}/templates/control_plane_userdata.sh.tpl", {
     cluster_name = var.name
     pod_cidr     = var.pod_cidr
     service_cidr = var.service_cidr
   })
+
+  source_dest_check = false # Disable Source/Destination Check
 
   tags = { Name = "${var.name}-control-plane" }
 }
@@ -129,7 +139,12 @@ resource "aws_autoscaling_group" "workers" {
   desired_capacity    = var.worker_desired
   min_size            = var.worker_min
   max_size            = var.worker_max
-  vpc_zone_identifier = var.subnets
+  vpc_zone_identifier = [aws_subnet.k8s_private_subnet.id]
+  health_check_type         = "EC2"
+  health_check_grace_period = 300
+  wait_for_capacity_timeout = "10m"
+
+
 
   launch_template {
     id      = aws_launch_template.worker_lt.id
@@ -141,4 +156,16 @@ resource "aws_autoscaling_group" "workers" {
     value               = "${var.name}-worker"
     propagate_at_launch = true
   }
+  tag {
+    key                 = "Cluster"
+    value               = var.cluster_name
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "Role"
+    value               = "worker"
+    propagate_at_launch = true
+  }
+
 }
