@@ -1,8 +1,6 @@
 variable "name" {}
 variable "region" {}
 
-variable "control_ami" {}
-variable "worker_ami" {}
 variable "instance_type" {}
 
 
