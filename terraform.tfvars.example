@@ -8,9 +8,7 @@ clusters = [
     worker_desired  = 2
     pod_cidr        = "10.244.0.0/16"
     service_cidr    = "10.96.0.0/12"
-  }
-]
-
+  },
   {
     name              = "cluster2"
     private_subnet_cidr_block = "10.0.3.0/24"
@@ -28,3 +26,4 @@ clusters = [
       }
     ]
   }
+]
