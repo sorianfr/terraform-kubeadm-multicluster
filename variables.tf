@@ -36,8 +36,7 @@ variable "clusters" {
   type = list(object({
     name           = string
     private_subnet_cidr_block = string
-    control_ami    = string 
-    worker_ami     = string
+    controlplane_private_ip    = string
     instance_type  = string
     worker_min     = number
     worker_max     = number
