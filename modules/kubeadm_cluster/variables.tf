@@ -32,10 +32,6 @@ variable "key_name" {
   type        = string
 }
 
-variable "private_key" {
-  description = "Private key content for SSH access"
-  type        = string
-}
 
 variable "vpc_cidr_block" {
   description = "CIDR block for the VPC"
@@ -47,10 +43,6 @@ variable "private_subnet_cidr_block" {
   type        = string
 }
 
-variable "instance_type" {
-  description = "Instance type for the Kubernetes nodes"
-  type        = string
-}
 
 variable "controlplane_private_ip" {
   description = "Private IP of the control plane"
