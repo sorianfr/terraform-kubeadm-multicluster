@@ -16,7 +16,10 @@ data "aws_caller_identity" "current" {}
 data "aws_iam_policy_document" "ec2_assume" {
   statement {
     actions = ["sts:AssumeRole"]
-    principals { type = "Service" identifiers = ["ec2.amazonaws.com"] }
+    principals {
+      type        = "Service"
+      identifiers = ["ec2.amazonaws.com"]
+    }
   }
 }
 
@@ -28,7 +31,7 @@ resource "aws_subnet" "k8s_private_subnet" {
   availability_zone       = var.availability_zone
 
   tags = {
-    Name = "${var.cluster_name}_private_subnet"
+    Name = "${var.name}_private_subnet"
   }
 }
 
@@ -39,6 +42,147 @@ resource "aws_route_table_association" "private_rta" {
   route_table_id = var.private_route_table_id
 }
 
+locals {
+      sg_name = "k8s_sg_${var.name}"
+}
+
+# Security Group
+resource "aws_security_group" "k8s_sg" {
+  name        = local.sg_name
+  vpc_id = var.vpc_id
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    security_groups = [var.public_sg_id] # Allow SSH from the bastion
+  }
+
+  ingress {
+    from_port   = 6443
+    to_port     = 6443
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr_block] # Kubernetes API access within VPC
+  }
+
+  ingress {
+    from_port   = 30000
+    to_port     = 32767
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr_block] # NodePort range within VPC
+  }
+
+  ingress {
+    from_port   = 10250
+    to_port     = 10250
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr_block] # # Kubelet communication within VPC
+  }
+
+  ingress {
+    from_port   = 5473
+    to_port     = 5473
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr_block] # Service communication within VPC
+  }
+
+  # BGP for Calico
+  ingress {
+    from_port   = 179
+    to_port     = 179
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr_block] # Ensure this matches the pod network CIDR
+  }
+
+  # Allow VXLAN for Calico (UDP 4789)
+  ingress {
+    from_port   = 4789
+    to_port     = 4789
+    protocol    = "udp"
+    cidr_blocks = [var.vpc_cidr_block] # Allow from entire VPC
+  }
+
+  # Allow pod-to-pod communication within the cluster
+  ingress {
+    from_port   = 0
+    to_port     = 65535
+    protocol    = "tcp"
+    cidr_blocks = [var.pod_cidr] # Pod network CIDR
+  }
+
+  # Allow IP-in-IP (used by Calico)
+  ingress {
+    from_port   = -1
+    to_port     = -1
+    protocol    = "4" # Protocol 4 is for IP-in-IP
+    cidr_blocks = [var.pod_cidr] # Pod network CIDR
+  }
+
+  ingress {
+    from_port   = -1
+    to_port     = -1
+    protocol    = "4" # Protocol 4 is for IP-in-IP
+    cidr_blocks = [var.vpc_cidr_block] # Pod network CIDR
+  }
+
+  # etcd Communication (Control Plane Only)
+  ingress {
+    from_port   = 2379
+    to_port     = 2380
+    protocol    = "tcp"
+    cidr_blocks = ["${var.controlplane_private_ip}/32"] # Restrict to control plane's private IP
+  }
+
+  # kube-scheduler and kube-controller-manager
+  ingress {
+    from_port   = 10259
+    to_port     = 10259
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr_block]
+  }
+
+  ingress {
+    from_port   = 10257
+    to_port     = 10257
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr_block]
+  }
+
+  ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1" 
+    cidr_blocks = [var.pod_cidr] # Pod network CIDR
+  }
+
+  ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1" 
+    cidr_blocks = [var.vpc_cidr_block] # Pod network CIDR
+  }   
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "k8s_sg"
+  }
+}
+
+resource "aws_security_group_rule" "ssh_within_group" {
+  type                     = "ingress"
+  from_port                = 22
+  to_port                  = 22
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.k8s_sg.id
+  source_security_group_id = aws_security_group.k8s_sg.id
+  description              = "Allow SSH within the security group"
+}
 
 
 
@@ -123,7 +267,7 @@ resource "aws_instance" "control_plane" {
 # Worker launch template
 resource "aws_launch_template" "worker_lt" {
   name_prefix   = "${var.name}-worker-"
-  ami = data.aws_ami.k8s_base.id
+  image_id = data.aws_ami.k8s_base.id
   instance_type = var.instance_type
 
   iam_instance_profile { name = aws_iam_instance_profile.worker_profile.name }
@@ -158,7 +302,7 @@ resource "aws_autoscaling_group" "workers" {
   }
   tag {
     key                 = "Cluster"
-    value               = var.cluster_name
+    value               = var.name
     propagate_at_launch = true
   }
 
