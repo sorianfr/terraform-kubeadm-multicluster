@@ -228,11 +228,13 @@ module "clusters" {
   source   = "./modules/kubeadm_cluster"
 
   name            = each.value.name
-  region          = each.value.region
+  region          = var.region
   vpc_id          = aws_vpc.main_vpc.id
   vpc_cidr_block         = var.vpc_cidr_block
   availability_zone = var.availability_zone
   private_route_table_id = aws_route_table.shared_private_rt.id
+  controlplane_private_ip  = each.value.controlplane_private_ip
+  private_subnet_cidr_block = each.value.private_subnet_cidr_block
   key_name               = aws_key_pair.k8s_key_pair.key_name
   iam_instance_profile   = aws_iam_instance_profile.AmazonEBS_instance_profile.name
   public_sg_id           = aws_security_group.bastion_sg.id
